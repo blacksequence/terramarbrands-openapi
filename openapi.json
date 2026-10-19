@@ -3326,6 +3326,132 @@
         }
       }
     },
+    "/GetInvoices": {
+      "get": {
+        "tags": [
+          "Pedidos y facturación"
+        ],
+        "operationId": "getInvoices",
+        "summary": "Facturas por mes (GetInvoices)",
+        "description": "Facturas emitidas de la consultora para el mes indicado. La SPA llama `GET /GetInvoices?Axo=<año>&Mes=<mes>&Idioma=<0|1>` con el token Bearer. Verificado en vivo (2026-10-18): responde `{ Invoices: [...], message, typeMessage }`; cada factura trae estatus, fecha, folio, pedido, total y URL de PDF/XML.",
+        "parameters": [
+          {
+            "name": "Axo",
+            "in": "query",
+            "required": true,
+            "description": "Año (4 dígitos).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026"
+          },
+          {
+            "name": "Mes",
+            "in": "query",
+            "required": true,
+            "description": "Mes (1–12).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "10"
+          },
+          {
+            "name": "Idioma",
+            "in": "query",
+            "required": true,
+            "description": "Idioma de los mensajes: 0 = español, 1 = inglés.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sobre con facturas del mes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "Invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "estatus": {
+                            "type": "string",
+                            "description": "Estatus de la factura."
+                          },
+                          "fecha": {
+                            "type": "string",
+                            "description": "Fecha de emisión."
+                          },
+                          "noFactura": {
+                            "type": "string",
+                            "description": "Número de factura."
+                          },
+                          "noPedido": {
+                            "type": "string",
+                            "description": "Número de pedido asociado."
+                          },
+                          "nombreDocumento": {
+                            "type": "string",
+                            "description": "Nombre del documento."
+                          },
+                          "totalFactura": {
+                            "type": "string",
+                            "description": "Total facturado."
+                          },
+                          "url": {
+                            "type": "string",
+                            "description": "URL del PDF."
+                          },
+                          "urlXML": {
+                            "type": "string",
+                            "description": "URL del XML."
+                          }
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "typeMessage": {
+                      "type": "string",
+                      "description": "success / error."
+                    }
+                  }
+                },
+                "example": {
+                  "Invoices": [
+                    {
+                      "estatus": "A",
+                      "fecha": "2026-10-01",
+                      "noFactura": "A-000000",
+                      "noPedido": "0000000",
+                      "nombreDocumento": "FACTURA-0000000000",
+                      "totalFactura": "0.00",
+                      "url": "https://example.invalid/factura.pdf",
+                      "urlXML": "https://example.invalid/factura.xml"
+                    }
+                  ],
+                  "message": "",
+                  "typeMessage": "success"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/EndpointNotFound"
+          }
+        }
+      }
+    },
     "/getEmbarques": {
       "get": {
         "tags": [

@@ -1,0 +1,11 @@
+{
+  "name": "terramarbrands-openapi",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write docs/index.html docs/openapi.yaml .github/workflows/swagger-docs.yml",
+    "format:check": "prettier --check docs/index.html docs/openapi.yaml .github/workflows/swagger-docs.yml"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10"
+  }
+}

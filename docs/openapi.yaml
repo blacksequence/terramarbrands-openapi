@@ -1,0 +1,3882 @@
+openapi: 3.1.0
+info:
+  title: Terramar Brands API — wsTerramarV2 (Service1.svc)
+  summary: API WCF del carrito y portal de consultoras de Terramar Brands México.
+  description:
+    'Especificación del servicio WCF `https://terramarbrands.mx/wsTerramarV2/Service1.svc`,
+    backend del SPA `carrito.terramarbrands.com.mx`.
+
+
+    **Autenticación.** `POST /getConsultoriaLogin` devuelve `token`; todas las demás
+    operaciones autenticadas se llaman con `Authorization: Bearer <token>` (la SPA
+    lo guarda como cookie `TMBcartToken`). Los endpoints de `Catálogo público` no
+    requieren token.
+
+
+    **Errores en banda.** El servicio casi siempre responde HTTP 200 y señala el fallo
+    dentro del cuerpo: `tipoMensaje: "error"` con `mensaje` (endpoints legacy) o `typeMessage`
+    con `messageCode` (endpoints modernos). HTTP 404 con HTML "Extremo no encontrado"
+    solo aparece cuando la ruta no existe en el servicio.
+
+
+    **Convenciones del carrito.** `usuarioOK` es el kit (usuario sin el prefijo "TE");
+    `folioPedido` es el folio del pedido abierto que devuelve `GET /getLogin`; `almacen`/`almacenSeleccionado`
+    es el almacén del pedido; las subcategorías (`getCategorias → subcateg[].numero`)
+    son el valor de `categoria` en `GET /getProductos`.
+
+
+    **Fuentes.** Reconstruida a partir de (1) el código de los 4 scrapers de referencia,
+    (2) el bundle JS del SPA de carrito (main.7e6d6927.js) y (3) verificación en vivo
+    el 2026-10-18 con una cuenta de consultoras (los campos marcados como "no verificado
+    en vivo" corresponden a operaciones de mutación que no se ejercitaron para no
+    alterar la cuenta). Los ejemplos usan datos sintéticos.
+
+
+    **Servicios relacionados no cubiertos por este documento** (hosts distintos, requieren
+    especificación separada): API REST administrativa `https://api.terramarbrandsmx.com`
+    (rutas `WebApiAdminCarritoMX/api/...` y `WebApiLoginMX/api/...`, con token `TokenNvoAdminMX`),
+    servicio USA `https://api.terramarbrandsusa.com/wsTerramarUSA/Service1.svc` (`postContratoUS`,
+    `postPreContratoUS`, `getPreContratoUS`) y servicio legacy `https://terramarbrands.mx/wsterramar/Service1.svc`.'
+  version: 1.0.0
+servers:
+  - url: https://terramarbrands.mx/wsTerramarV2/Service1.svc
+    description: Producción (MX)
+tags:
+  - name: Sesión
+    description: Login, restauración de sesión y recuperación de contraseña.
+  - name: Catálogo público
+    description: Departamentos y fichas de producto del sitio público (sin autenticación).
+  - name: Carrito
+    description: Almacenes, categorías, productos y operaciones del pedido del carrito.
+  - name: Perfil de consultora
+    description: Ficha de la consultora, contratos, domicilio y contraseña.
+  - name: Premios y bonos
+    description: Premios del periodo, bonos por etapa y tarjeta SiVale.
+  - name: Pedidos y facturación
+    description: Facturas, embarques, estado de cuenta y pedidos de catálogo digital.
+  - name: Linaje
+    description: Estado de rama, kits del linaje y solicitudes de linaje.
+  - name: Atenciones
+    description: Tickets de atención y sus comentarios.
+  - name: Viaje
+    description: Incentivos de viaje del periodo.
+  - name: Certificados
+    description: Constancias y certificados de la consultora.
+  - name: Pagos
+    description: Pagos hospedados ProPay (Ireland Pay).
+  - name: Producto
+    description: Fichas técnicas de producto.
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description:
+        Token devuelto por `POST /getConsultoriaLogin` (cookie `TMBcartToken`
+        en la SPA).
+  responses:
+    EndpointNotFound:
+      description: Ruta no registrada en el servicio WCF (HTML "Extremo no encontrado").
+      content:
+        text/html:
+          schema:
+            type: string
+  schemas:
+    LoginResponse:
+      type: object
+      properties:
+        usuario:
+          type: string
+          description: Usuario completo devuelto (p. ej. "TE1234567").
+          example: TE1234567
+        nivel:
+          type: string
+          description: Nivel de la consultora.
+        nombre:
+          type: string
+          description: Nombre de pila.
+          example: EJEMPLO
+        token:
+          type: string
+          description:
+            "Token de sesión (cookie TMBcartToken en la SPA). Se envía
+            como `Authorization: Bearer <token>`."
+          example: eyJhbGciOi...
+        tokenJWT:
+          type: string
+          description: Token JWT equivalente.
+          example: eyJhbGciOi...
+        tipoMensaje:
+          type: string
+          description: '"exito" en éxito.'
+          example: exito
+        mensaje:
+          type: string
+          description: Mensaje de error (vacío en éxito).
+          example: ""
+      required:
+        - usuario
+        - token
+        - tipoMensaje
+    LoginResultRow:
+      type: object
+      properties:
+        usuario:
+          type: string
+          description: Usuario completo (p. ej. "TE1234567").
+          example: TE1234567
+        usuarioOk:
+          type: string
+          description: 'Kit: usuario en mayúsculas sin el prefijo "TE" (7 dígitos).'
+          example: "1234567"
+        token:
+          type: string
+          description: Token de sesión renovado.
+          example: eyJhbGciOi...
+        nombre:
+          type: string
+          description: Nombre de pila.
+          example: EJEMPLO
+        apPaterno:
+          type: string
+          description: Apellido paterno.
+          example: EJEMPLO
+        apMaterno:
+          type: string
+          description: Apellido materno.
+          example: EJEMPLO
+        almacen:
+          type: string
+          description: Almacén seleccionado del pedido (p. ej. "02").
+          example: "02"
+        folioPedido:
+          type: string
+          description: Folio del pedido abierto de la consultora.
+          example: "4830000"
+        siguientePrograma:
+          type: string
+          description: Siguiente pantalla del flujo de la SPA (p. ej. "selalma").
+          example: selalma
+        categ:
+          type: string
+          description: Categoría de la consultora.
+        diasExpiracion:
+          type: string
+          description: Días para expirar el pedido.
+        digitoVerificador:
+          type: string
+          description: Dígito verificador del kit.
+        avisoPedidoRetenido:
+          type: string
+          description: Aviso si el pedido está retenido.
+        folioPedidoRetenido:
+          type: string
+          description: Folio del pedido retenido.
+        version:
+          type: string
+          description: Versión del contrato/pedido.
+        tipoMensaje:
+          type: string
+          description: '"exito" en éxito.'
+          example: exito
+        mensaje:
+          type: string
+          description: Mensaje de error (vacío en éxito).
+          example: ""
+        depura:
+          type: string
+          description: Texto de depuración.
+      required:
+        - tipoMensaje
+    Department:
+      type: object
+      properties:
+        depto:
+          type: string
+          description: Código de departamento (1–10).
+          example: "1"
+        nombre:
+          type: string
+          description: Nombre del departamento.
+          example: Color
+        menu:
+          type: string
+          description:
+            '"3" = departamento de producto; otros valores son navegación
+            del sitio.'
+          example: "3"
+        secciones:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubDepartment"
+          description: Subdepartamentos del departamento (vacío en entradas de navegación).
+      required:
+        - depto
+        - nombre
+        - menu
+        - secciones
+    SubDepartment:
+      type: object
+      properties:
+        subdepto:
+          type: string
+          description: Código de subdepartamento.
+          example: "1"
+        nombre:
+          type: string
+          description: Nombre del subdepartamento.
+          example: Rostro
+      required:
+        - subdepto
+        - nombre
+    ProductDescription:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Siempre "0".
+          example: "0"
+        clave:
+          type: string
+          description: SKU / clave del producto (única por variante).
+          example: A
+        producto:
+          type: string
+          description: Nombre del producto.
+          example: Maquillaje Compacto 11.5g
+        precio:
+          type: string
+          description: Precio MXN como cadena numérica.
+          example: "630"
+        descripcion:
+          type: string
+          description: Descripción en HTML.
+          example: <p>…</p>
+        aplicacion:
+          type: string
+          description: Modo de aplicación en HTML.
+          example: <p>…</p>
+        ingredientes:
+          type: string
+          description: Ingredientes en HTML.
+          example: <p>…</p>
+        familiaOlfativa:
+          type: string
+          description: Familia olfativa (solo fragancias).
+        perfumista:
+          type: string
+          description: Perfumista (ocasional).
+        link:
+          type: string
+          description: Slug de URL (ocasional).
+        departamento:
+          type: string
+          description: Código de departamento 1–10 (se resuelve con /getDeptos).
+          example: "1"
+        subdepartamento:
+          type: string
+          description: Código de subdepartamento.
+          example: "1"
+        marca:
+          type: string
+          description: Marca (ocasional).
+        clase:
+          type: string
+          description: Clase/variante (tono, matiz).
+        imagen:
+          type: string
+          description: URL de imagen (placeholder de categoría en la mayoría).
+        carrusel:
+          type: string
+          description: '"S" si el producto tiene carrusel de imágenes.'
+          example: S
+      required:
+        - clave
+        - producto
+        - precio
+        - departamento
+    Warehouse:
+      type: object
+      properties:
+        almacen:
+          type: string
+          description: Código de almacén.
+          example: "02"
+        descri:
+          type: string
+          description: Descripción del almacén.
+      required:
+        - almacen
+    CartCategory:
+      type: object
+      properties:
+        numero:
+          type: string
+          description: Número de categoría.
+          example: "0100"
+        descri:
+          type: string
+          description: Nombre de la categoría.
+          example: Promociones
+        imagen:
+          type: string
+          description: URL de imagen.
+        subcateg:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartSubcategory"
+          description: Subcategorías.
+      required:
+        - numero
+        - descri
+        - imagen
+        - subcateg
+    CartSubcategory:
+      type: object
+      properties:
+        numero:
+          type: string
+          description: Número de subcategoría (se usa como `categoria` en /getProductos).
+          example: "0101"
+        descri:
+          type: string
+          description: Nombre de la subcategoría.
+          example: OCTUBRE 2026
+        imagen:
+          type: string
+          description: URL de imagen.
+      required:
+        - numero
+        - descri
+        - imagen
+    CartProduct:
+      type: object
+      properties:
+        clave:
+          type: string
+          description: SKU del producto.
+          example: 01901
+        clavePrimaria:
+          type: string
+          description: Clave primaria/base del producto.
+        descri:
+          type: string
+          description: Descripción del producto.
+          example: SET NOTES EXOT LAV + PERFUMERO
+        precio:
+          type: string
+          description: Precio vigente (MXN, cadena).
+          example: "460.13"
+        precioLista:
+          type: string
+          description: Precio de lista (MXN, cadena).
+          example: "460.13"
+        txtPromo:
+          type: string
+          description: Texto promocional.
+          example: Hasta Agotar Existencias
+        txtPie:
+          type: string
+          description: Texto de pie de página del producto.
+        status:
+          type: string
+          description: Estatus del producto.
+        imagen:
+          type: string
+          description: URL de imagen.
+        imagenAlt:
+          type: string
+          description: URL de imagen alternativa.
+      required:
+        - clave
+        - descri
+        - precio
+    AddressRow:
+      type: object
+      properties:
+        address:
+          type: string
+          description: Domicilio en una sola línea.
+          example: "CALLE EJEMPLO No ext: 000"
+        outdoorNum:
+          type: string
+          description: Número exterior.
+        interiorNum:
+          type: string
+          description: Número interior.
+        betweenStr:
+          type: string
+          description: Entre calles.
+        andStreet:
+          type: string
+          description: Y calle.
+        postalCode:
+          type: string
+          description: Código postal.
+          example: "00000"
+        suburb:
+          type: string
+          description: Colonia.
+          example: EJEMPLO
+        municipality:
+          type: string
+          description: Municipio.
+          example: EJEMPLO
+        federalEnt:
+          type: string
+          description: Clave de entidad federativa.
+          example: "16"
+        packaging:
+          type: string
+          description: Empaque.
+        finalClient:
+          type: string
+          description: '"S" si el envío es a cliente final.'
+        endCustName:
+          type: string
+          description: Nombre del cliente final.
+        endCustTel:
+          type: string
+          description: Teléfono del cliente final.
+    Invoice:
+      type: object
+      properties:
+        referencia:
+          type: string
+          description: Referencia de la factura.
+          example: "8720000"
+        folioReal:
+          type: string
+          description: Folio real (F + dígitos).
+          example: F7290000
+        archivoPdf:
+          type: string
+          description: Nombre del archivo PDF.
+          example: Factura-F7290000.pdf
+        archivoXml:
+          type: string
+          description: Nombre del archivo XML.
+          example: Factura-F7290000.xml
+        rutaPdf:
+          type: string
+          description: URL absoluta del PDF.
+          example: https://docs.terramarbrands.com.mx/invoices/Factura-F7290000.pdf
+        rutaXml:
+          type: string
+          description: URL absoluta del XML.
+          example: https://docs.terramarbrands.com.mx/invoices/Factura-F7290000.xml
+      required:
+        - referencia
+        - folioReal
+    Shipment:
+      type: object
+      properties:
+        pedido:
+          type: string
+          description: Número de pedido.
+          example: "8900000"
+        caja:
+          type: string
+          description: Número de caja.
+          example: "1"
+        poblacion:
+          type: string
+          description: Población de destino.
+          example: EJEMPLO
+        peso:
+          type: string
+          description: Peso.
+          example: "0"
+        piezas:
+          type: string
+          description: Piezas.
+          example: "0"
+        fechaFacturacion:
+          type: string
+          description: Fecha de facturación (dd-mm-aaaa).
+          example: 01-01-2026
+        fechaSurtido:
+          type: string
+          description: Fecha de surtido (dd-mm-aaaa).
+          example: 01-01-2026
+        paqueteria:
+          type: string
+          description: Paquetería.
+          example: Paquete Express
+        guia:
+          type: string
+          description: Número de guía.
+          example: GDL02EXA000000
+        link:
+          type: string
+          description: URL de rastreo de la guía.
+          example: https://www.paquetexpress.com.mx/rastreo?guia=GDL02EXA000000
+        foto:
+          type: string
+          description: URL de foto del embarque.
+      required:
+        - pedido
+    AccountMovement:
+      type: object
+      properties:
+        fechaProceso:
+          type: string
+          description: Fecha del movimiento (d/m/aaaa).
+          example: 1/1/2026
+        descri:
+          type: string
+          description: Tipo de movimiento ("Premio", "Pago", "Pedido"…).
+          example: Pedido
+        pedido:
+          type: string
+          description: Pedido asociado.
+          example: "004150000"
+        monto:
+          type: string
+          description: Monto (MXN, cadena).
+          example: "1000.00"
+        letraA:
+          type: string
+          description: Letra A.
+          example: "580.00"
+        modulos:
+          type: string
+          description: Módulos.
+          example: "1.00"
+        almacen:
+          type: string
+          description: Almacén / tipo de envío.
+          example: Envio a Domicilio
+        guia:
+          type: string
+          description: Guía ("N/A" cuando no aplica).
+          example: N/A
+        paqueteria:
+          type: string
+          description: Paquetería.
+          example: N/A
+        enlaceRastreo:
+          type: string
+          description: Enlace de rastreo.
+    BranchStatus:
+      type: object
+      properties:
+        anio:
+          type: string
+          description: Año.
+          example: "2026"
+        mes:
+          type: string
+          description: Mes.
+          example: "10"
+        linea:
+          type: string
+          description: Línea ("0" directa, otro valor indirecta).
+          example: "0"
+        kit:
+          type: string
+          description: Kit de la consultora.
+          example: "1234567"
+        nombre:
+          type: string
+          description: Nombre completo.
+          example: EJEMPLO EJEMPLO
+        categoria:
+          type: string
+          description: Categoría ("CI", …).
+          example: CI
+        activas:
+          type: string
+          description: Consultoras activas.
+          example: "0"
+        ordenandoGC:
+          type: string
+          description: Ordenando grupo cerrado.
+          example: "0"
+        ordenandoDirectas:
+          type: string
+          description: Ordenando directas.
+          example: "0"
+        modulosGC:
+          type: string
+          description: Módulos grupo cerrado.
+          example: "1.00"
+        patrociniosDirectos:
+          type: string
+          description: Patrocinios directos.
+          example: "0"
+        patrociniosIndirectos:
+          type: string
+          description: Patrocinios indirectos.
+          example: "0"
+        totalPatrocinios:
+          type: string
+          description: Total patrocinios.
+          example: "0"
+        consultorasDirectasPatrocinando:
+          type: string
+          description: Directas patrocinando.
+          example: "0"
+        consultorasIndirectasPatrocinando:
+          type: string
+          description: Indirectas patrocinando.
+          example: "0"
+        totalConsultorasPatrocinando:
+          type: string
+          description: Total patrocinando.
+          example: "0"
+        consultorasPorPerder:
+          type: string
+          description: Consultoras por perder.
+          example: "0"
+        gruposCerrando:
+          type: string
+          description: Grupos por cerrar.
+          example: "0"
+        directasUSA:
+          type: string
+          description: Directas USA.
+          example: "0"
+        indirectasUSA:
+          type: string
+          description: Indirectas USA.
+          example: "0"
+        pais:
+          type: string
+          description: País (0 MX, otro USA).
+          example: "0"
+        paisDescri:
+          type: string
+          description: Descripción del país.
+        modulosMX:
+          type: string
+          description: Módulos MX.
+          example: "1.00"
+        modulosUS:
+          type: string
+          description: Módulos US.
+          example: "0.00"
+        modulosElla:
+          type: string
+          description: Módulos Ella.
+          example: "0.00"
+    ConsultantProfile:
+      type: object
+      properties:
+        usuarioOK:
+          type: string
+          description: Kit de la consultora.
+          example: "1234567"
+        nombre:
+          type: string
+          description: Nombre de pila.
+          example: EJEMPLO
+        paterno:
+          type: string
+          description: Apellido paterno.
+          example: EJEMPLO
+        materno:
+          type: string
+          description: Apellido materno.
+          example: EJEMPLO
+        rfc:
+          type: string
+          description: RFC (genérico si no se capturó).
+          example: XAXX010101000
+        sexo:
+          type: string
+          description: Sexo ("Femenino"/"Masculino").
+          example: Femenino
+        fechaNac:
+          type: string
+          description: Fecha de nacimiento (aaaa-mm-dd).
+          example: "1990-01-01"
+        estado:
+          type: string
+          description: Clave de entidad federativa.
+          example: "16"
+        estadoDescri:
+          type: string
+          description: Nombre de la entidad.
+          example: Estado de ejemplo
+        email:
+          type: string
+          description: Correo electrónico.
+          example: ejemplo@ejemplo.com
+        cp:
+          type: string
+          description: Código postal.
+          example: "00000"
+        entreCalle:
+          type: string
+          description: Entre calle.
+        yLaCalle:
+          type: string
+          description: Y calle.
+        telefonoCasa:
+          type: string
+          description: Teléfono de casa.
+          example: "0000000000"
+        celular:
+          type: string
+          description: Celular.
+          example: "0000000000"
+        telefonoOficina:
+          type: string
+          description: Teléfono de oficina.
+        colonia:
+          type: string
+          description: Colonia.
+          example: EJEMPLO
+        calle:
+          type: string
+          description: Calle.
+          example: CALLE EJEMPLO
+        numeroExterior:
+          type: string
+          description: Número exterior.
+          example: "0"
+        numeroInterior:
+          type: string
+          description: Número interior.
+        edificio:
+          type: string
+          description: Edificio.
+        lote:
+          type: string
+          description: Lote.
+        depCasa:
+          type: string
+          description: Departamento/casa.
+        manzana:
+          type: string
+          description: Manzana.
+        kitPatrocinadora:
+          type: string
+          description: Kit de la patrocinadora.
+          example: "0000000"
+        nombrePatrocinadora:
+          type: string
+          description: Nombre de la patrocinadora.
+          example: EJEMPLO
+        accionSiguiente:
+          type: string
+          description: Siguiente acción del flujo de alta.
+        accionSiguienteMensaje:
+          type: string
+          description: Mensaje de la siguiente acción.
+        mensajeValidacionDatos:
+          type: string
+          description: Validación de datos ("*** Datos correctos ***" cuando es válido).
+        tipoMensaje:
+          type: string
+          description: '"exito" en éxito.'
+          example: exito
+        mensaje:
+          type: string
+          description: Mensaje de error (vacío en éxito).
+          example: ""
+        listaColonias:
+          type: array
+          items:
+            description:
+              Colonias sugeridas para el CP capturado (objetos sueltos
+              del servicio WCF).
+    Award:
+      type: object
+      properties:
+        premiosAElegir:
+          type: array
+          items:
+            type: object
+            properties:
+              premio:
+                type: string
+                description: Clave del premio a elegir.
+                example: "89101"
+            required:
+              - premio
+          description: Premios elegibles para el periodo.
+        premioElegido:
+          type: string
+          description: Premio elegido (lo agrega la SPA).
+      required:
+        - premiosAElegir
+    TipoEnvelope:
+      type: object
+      properties:
+        tipoMensaje:
+          type: string
+          description:
+            '"exito" en éxito; cualquier otro valor (p. ej. "error") indica
+            rechazo lógico de la petición.'
+          example: exito
+        mensaje:
+          type: string
+          description: Mensaje humano de error/validación (vacío en éxito).
+          example: ""
+      required:
+        - tipoMensaje
+    TypeMessageEnvelope:
+      type: object
+      properties:
+        typeMessage:
+          type: string
+          description:
+            '"success" en éxito; "error"/"Conflict"/código numérico en
+            fallo.'
+          example: success
+        message:
+          type: string
+          description: Mensaje humano.
+          example: ""
+        messageCode:
+          type: number
+          description: Código numérico de estado (200, 204, 409…).
+          example: 200
+        data:
+          description: Carga útil; null o {} cuando no hay resultados.
+paths:
+  /getConsultoriaLogin:
+    post:
+      tags:
+        - Sesión
+      operationId: loginConsultora
+      summary: Autenticar consultora y obtener token
+      description:
+        "Login del portal de carrito. La SPA (y los scrapers) lo llaman
+        con la cabecera `seccion: CONSULTORIA` y `origen` fijo `CARRITONUE`. Devuelve
+        el token que el resto de las operaciones envían como `Authorization: Bearer
+        <token>` (cookie TMBcartToken en la SPA). Fuente: 4 scrapers + bundle de la
+        SPA. Verificado en vivo (2026-10-18)."
+      security: []
+      parameters:
+        - name: seccion
+          in: header
+          required: true
+          description: Sección del portal; debe ser "CONSULTORIA".
+          schema:
+            type: string
+          example: CONSULTORIA
+      requestBody:
+        description: Credenciales de la consultora.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usuario:
+                  type: string
+                  description: Usuario (patrón TE + 7 dígitos).
+                  example: TE1234567
+                claveAcceso:
+                  type: string
+                  description: Contraseña.
+                  example: "********"
+                origen:
+                  type: string
+                  description: Origen fijo de la SPA de carrito.
+                  example: CARRITONUE
+              required:
+                - usuario
+                - claveAcceso
+                - origen
+            example:
+              usuario: TE1234567
+              claveAcceso: "********"
+              origen: CARRITONUE
+      responses:
+        "200":
+          description: Login exitoso o rechazo lógico (`tipoMensaje != "exito"`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+              example:
+                usuario: TE1234567
+                nivel: "0"
+                nombre: EJEMPLO
+                token: eyJhbGciOi...
+                tokenJWT: eyJhbGciOi...
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getLogin:
+    get:
+      tags:
+        - Sesión
+      operationId: getSessionInfo
+      summary: Restaurar sesión y datos del pedido abierto
+      description:
+        La SPA lo llama al iniciar (reabrirPedido=S) y al salir (reabrirPedido=N);
+        `usuario` y `claveAcceso` viajan vacíos y la sesión se resuelve por el token
+        Bearer. Devuelve el folio del pedido y el almacén que usan las operaciones
+        de carrito. Verificado en vivo.
+      parameters:
+        - name: usuario
+          in: query
+          required: true
+          description: "Vacío: la sesión se identifica por el token."
+          schema:
+            type: string
+          example: ""
+        - name: claveAcceso
+          in: query
+          required: true
+          description: Vacío.
+          schema:
+            type: string
+          example: ""
+        - name: origen
+          in: query
+          required: true
+          description: Origen fijo de la SPA.
+          schema:
+            type: string
+          example: CARRITONUE
+        - name: reabrirPedido
+          in: query
+          required: true
+          description: S reabre el pedido anterior; N lo cierra.
+          schema:
+            type: string
+            enum:
+              - S
+              - N
+          example: S
+      responses:
+        "200":
+          description: Sesión restaurada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  getLoginResult:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LoginResultRow"
+                    description: Un renglón con la sesión.
+                required:
+                  - getLoginResult
+              example:
+                getLoginResult:
+                  - usuario: TE1234567
+                    usuarioOk: "1234567"
+                    token: eyJhbGciOi...
+                    nombre: EJEMPLO
+                    apPaterno: EJEMPLO
+                    apMaterno: EJEMPLO
+                    almacen: "02"
+                    folioPedido: "4830000"
+                    siguientePrograma: selalma
+                    categ: ""
+                    diasExpiracion: ""
+                    digitoVerificador: "00"
+                    avisoPedidoRetenido: ""
+                    folioPedidoRetenido: ""
+                    version: ""
+                    tipoMensaje: exito
+                    mensaje: ""
+                    depura: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getOlvidoSuPwd:
+    get:
+      tags:
+        - Sesión
+      operationId: forgotPassword
+      summary: Solicitar recordatorio de contraseña
+      description:
+        Envía el recordatorio de contraseña al correo de la consultora.
+        Se usa desde la pantalla de login (sin sesión). Descubierto en el bundle de
+        la SPA; respuesta con el sobre genérico `tipoMensaje`/`mensaje`.
+      security: []
+      parameters:
+        - name: usuario
+          in: query
+          required: true
+          description: Usuario en mayúsculas.
+          schema:
+            type: string
+          example: TE1234567
+        - name: email
+          in: query
+          required: true
+          description: Correo de la consultora.
+          schema:
+            type: string
+          example: ejemplo@ejemplo.com
+      responses:
+        "200":
+          description: Resultado del envío.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TipoEnvelope"
+              example:
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getDeptos:
+    get:
+      tags:
+        - Catálogo público
+      operationId: listDepartments
+      summary: Departamentos del catálogo
+      description:
+        'Catálogo de departamentos/subdepartamentos del sitio público.
+        Las entradas con `menu = "3"` son departamentos de producto; las demás son
+        navegación. Fuente: product-scrapper. Verificado en vivo (sin autenticación).'
+      security: []
+      responses:
+        "200":
+          description: Lista de departamentos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Department"
+                description: Departamentos.
+              example:
+                - depto: "1"
+                  nombre: Color
+                  menu: "3"
+                  secciones:
+                    - subdepto: "1"
+                      nombre: Rostro
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getDescripciones:
+    get:
+      tags:
+        - Catálogo público
+      operationId: listProductDescriptions
+      summary: Ficha completa de productos
+      description:
+        "Devuelve el catálogo completo (`depto=0`, ~227 renglones, una
+        entrada por variante/tono) o las descripciones de un departamento. Con `clave`
+        filtra un solo producto. Fuente: product-scrapper. Verificado en vivo (sin
+        autenticación): `depto=0` devuelve todo el catálogo; valores de `depto` sin
+        variantes pueden devolver un renglón de error SQL del backend."
+      security: []
+      parameters:
+        - name: depto
+          in: query
+          required: true
+          description: "Departamento: 0 = catálogo completo, 1–10 = un departamento."
+          schema:
+            type: string
+          example: "0"
+        - name: clave
+          in: query
+          required: false
+          description: Clave de producto para filtrar una sola ficha.
+          schema:
+            type: string
+          example: A
+      responses:
+        "200":
+          description: Catálogo o fichas solicitadas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductDescription"
+                description: Productos.
+              example:
+                - id: "0"
+                  clave: A
+                  producto: Maquillaje Compacto 11.5g
+                  precio: "630"
+                  descripcion: <p>…</p>
+                  aplicacion: <p>…</p>
+                  ingredientes: <p>…</p>
+                  familiaOlfativa: ""
+                  perfumista: ""
+                  link: ""
+                  departamento: "1"
+                  subdepartamento: "1"
+                  marca: ""
+                  clase: ""
+                  imagen: ""
+                  carrusel: S
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getAlmacenes:
+    get:
+      tags:
+        - Carrito
+      operationId: listWarehouses
+      summary: Almacenes disponibles del pedido
+      description:
+        Almacenes de los que se puede surtir el pedido. La SPA lo llama
+        tras el login. Descubierto en el bundle de la SPA. Verificado en vivo.
+      parameters:
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: folioPedido
+          in: query
+          required: true
+          description:
+            Folio del pedido abierto de la consultora (devuelto por /getLogin).
+            Requerido por las operaciones de carrito.
+          schema:
+            type: string
+          example: "4830000"
+        - name: almacenSeleccionado
+          in: query
+          required: true
+          description: Almacén seleccionado.
+          schema:
+            type: string
+          example: "02"
+        - name: dominio
+          in: query
+          required: true
+          description: Dominio del sitio (p. ej. carrito.terramarbrands.com.mx).
+          schema:
+            type: string
+          example: carrito.terramarbrands.com.mx
+        - name: origen
+          in: query
+          required: true
+          description: Origen fijo.
+          schema:
+            type: string
+          example: CARRITONUE
+      responses:
+        "200":
+          description: Almacenes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  getAlmacenesResult:
+                    type: object
+                    properties:
+                      usuarioOk:
+                        type: string
+                        description: Echo del kit.
+                      digitoVerificador:
+                        type: string
+                        description: Dígito verificador.
+                        example: "59"
+                      almacen:
+                        type: string
+                        description: Almacén del pedido.
+                        example: "02"
+                      folioPedido:
+                        type: string
+                        description: Folio del pedido.
+                        example: "4830000"
+                      avisoPedidoRetenido:
+                        type: string
+                        description: Aviso de pedido retenido.
+                      tipoMensaje:
+                        type: string
+                        description: '"exito" en éxito.'
+                        example: exito
+                      mensaje:
+                        type: string
+                        description: Mensaje de error.
+                        example: ""
+                      almacenes:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Warehouse"
+                        description: Almacenes.
+                    required:
+                      - tipoMensaje
+                      - almacenes
+                required:
+                  - getAlmacenesResult
+              example:
+                getAlmacenesResult:
+                  usuarioOk: ""
+                  digitoVerificador: "00"
+                  almacen: "02"
+                  folioPedido: "4830000"
+                  avisoPedidoRetenido: ""
+                  tipoMensaje: exito
+                  mensaje: ""
+                  almacenes:
+                    - almacen: "02"
+                      descri: EJEMPLO
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getCategorias:
+    get:
+      tags:
+        - Carrito
+      operationId: listCartCategories
+      summary: Árbol de categorías del carrito
+      description:
+        "Categorías y subcategorías del carrito. Las subcategorías (`subcateg[].numero`)
+        son las que se pasan como `categoria` a /getProductos. Fuente: catalog-scrapper
+        + bundle de la SPA. Verificado en vivo."
+      parameters:
+        - name: accion
+          in: query
+          required: true
+          description: Fijo "ALMAOK".
+          schema:
+            type: string
+          example: ALMAOK
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: folioPedido
+          in: query
+          required: true
+          description:
+            Folio del pedido abierto de la consultora (devuelto por /getLogin).
+            Requerido por las operaciones de carrito.
+          schema:
+            type: string
+          example: "4830000"
+        - name: almacenSeleccionado
+          in: query
+          required: true
+          description: Almacén del pedido.
+          schema:
+            type: string
+          example: "02"
+        - name: origen
+          in: query
+          required: false
+          description: Origen fijo.
+          schema:
+            type: string
+          example: CARRITONUE
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+        - name: dominio
+          in: header
+          required: false
+          description: Dominio del sitio (la SPA lo envía; los scrapers no).
+          schema:
+            type: string
+          example: carrito.terramarbrands.com.mx
+      responses:
+        "200":
+          description: Árbol de categorías.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  getCategoriasResult:
+                    type: object
+                    properties:
+                      usuarioOk:
+                        type: string
+                        description: Echo del kit.
+                      folioPedido:
+                        type: string
+                        description: Folio del pedido.
+                        example: "4830000"
+                      almacen:
+                        type: string
+                        description: Almacén.
+                        example: "02"
+                      tipoMensaje:
+                        type: string
+                        description: '"exito" en éxito.'
+                        example: exito
+                      mensaje:
+                        type: string
+                        description: Mensaje de error.
+                        example: ""
+                      categorias:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CartCategory"
+                        description: Categorías con subcategorías.
+                    required:
+                      - tipoMensaje
+                      - categorias
+                required:
+                  - getCategoriasResult
+              example:
+                getCategoriasResult:
+                  usuarioOk: ""
+                  folioPedido: "4830000"
+                  almacen: "02"
+                  tipoMensaje: exito
+                  mensaje: ""
+                  categorias:
+                    - numero: "0100"
+                      descri: Promociones
+                      imagen: https://webimages.terramarbrands.com.mx/…
+                      subcateg:
+                        - numero: "0101"
+                          descri: OCTUBRE 2026
+                          imagen: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getProductos:
+    get:
+      tags:
+        - Carrito
+      operationId: listCartProducts
+      summary: Productos de una subcategoría del carrito
+      description:
+        'Productos vigentes de una subcategoría (use el `subcateg[].numero`
+        de /getCategorias, no el número de categoría). `folioPedido` debe ser el folio
+        del pedido abierto devuelto por /getLogin; con folios inválidos el servicio
+        responde en banda `tipoMensaje = "error"` y "falta el Numero de Pedido". Fuente:
+        catalog-scrapper + bundle de la SPA. Verificado en vivo.'
+      parameters:
+        - name: accion
+          in: query
+          required: true
+          description: Fijo "desplegar".
+          schema:
+            type: string
+          example: desplegar
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: folioPedido
+          in: query
+          required: true
+          description:
+            Folio del pedido abierto de la consultora (devuelto por /getLogin).
+            Requerido por las operaciones de carrito.
+          schema:
+            type: string
+          example: "4830000"
+        - name: almacen
+          in: query
+          required: true
+          description: Almacén del pedido.
+          schema:
+            type: string
+          example: "02"
+        - name: categoria
+          in: query
+          required: true
+          description: Número de subcategoría.
+          schema:
+            type: string
+          example: "0101"
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+      responses:
+        "200":
+          description: Productos de la subcategoría.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  getProductosResult:
+                    type: object
+                    properties:
+                      usuarioOk:
+                        type: string
+                        description: Echo del kit.
+                      folioPedido:
+                        type: string
+                        description: Folio del pedido.
+                        example: "4830000"
+                      almacen:
+                        type: string
+                        description: Almacén.
+                        example: "02"
+                      registros:
+                        type: string
+                        description: Número de renglones.
+                        example: "94"
+                      categoriaNumero:
+                        type: string
+                        description: Subcategoría solicitada.
+                        example: "0101"
+                      categoriaDescri:
+                        type: string
+                        description: Descripción de la subcategoría.
+                        example: OCTUBRE 2026
+                      tipoMensaje:
+                        type: string
+                        description:
+                          '"exito" en éxito; "error" cuando la subcategoría
+                          no aplica a la cuenta.'
+                        example: exito
+                      mensaje:
+                        type: string
+                        description:
+                          Mensaje de error ("No existen productos…" / "falta
+                          el Numero de Pedido").
+                        example: ""
+                      productos:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CartProduct"
+                        description: Productos.
+                    required:
+                      - tipoMensaje
+                      - productos
+                required:
+                  - getProductosResult
+              example:
+                getProductosResult:
+                  usuarioOk: ""
+                  folioPedido: "4830000"
+                  almacen: "02"
+                  registros: "94"
+                  categoriaNumero: "0101"
+                  categoriaDescri: OCTUBRE 2026
+                  tipoMensaje: exito
+                  mensaje: ""
+                  productos:
+                    - clave: 01901
+                      clavePrimaria: ""
+                      descri: SET NOTES EXOT LAV + PERFUMERO
+                      precio: "460.13"
+                      precioLista: "460.13"
+                      txtPromo: Hasta Agotar Existencias
+                      txtPie: ""
+                      status: ""
+                      imagen: https://webimages.terramarbrands.com.mx/…
+                      imagenAlt: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getAgregarAlCarrito:
+    post:
+      tags:
+        - Carrito
+      operationId: addToCart
+      summary: Agregar producto al carrito
+      description:
+        Pese al prefijo `get`, es un POST que muta el carrito del pedido.
+        Descubierto en el bundle de la SPA (pantalla de producto); no verificado en
+        vivo para no alterar el pedido de la cuenta de pruebas.
+      requestBody:
+        description: Renglón a agregar.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accion:
+                  type: string
+                  description: Fijo "ORDENAR".
+                  example: ORDENAR
+                usuarioOK:
+                  type: string
+                  description: Kit de la consultora.
+                  example: "1234567"
+                folioPedido:
+                  type: string
+                  description: Folio del pedido.
+                  example: "4830000"
+                almacen:
+                  type: string
+                  description: Almacén.
+                  example: "02"
+                categoria:
+                  type: string
+                  description: Subcategoría.
+                  example: "0101"
+                caller:
+                  type: string
+                  description: Pantalla que llama ("consultarCart").
+                  example: consultarCart
+                clave:
+                  type: string
+                  description: SKU del producto.
+                  example: 01901
+                cantidad:
+                  type: string
+                  description: Cantidad.
+                  example: "1"
+                numeroLinea:
+                  type: string
+                  description: Renglón del carrito (vacío para nuevo).
+                  example: ""
+                textoProdSeleccion:
+                  type: string
+                  description: Texto del producto seleccionado.
+                  example: ""
+                idioma:
+                  type: string
+                  description: 0 español / 1 inglés.
+                  example: "0"
+                origen:
+                  type: string
+                  description: Fijo "CARRITONUE".
+                  example: CARRITONUE
+              required:
+                - accion
+                - usuarioOK
+                - folioPedido
+                - almacen
+                - categoria
+                - clave
+                - cantidad
+            example:
+              accion: ORDENAR
+              usuarioOK: "1234567"
+              folioPedido: "4830000"
+              almacen: "02"
+              categoria: "0101"
+              caller: consultarCart
+              clave: 01901
+              cantidad: "1"
+              numeroLinea: ""
+              textoProdSeleccion: ""
+              idioma: "0"
+              origen: CARRITONUE
+      responses:
+        "200":
+          description: Sobre genérico de resultado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TipoEnvelope"
+              example:
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getReciclar:
+    get:
+      tags:
+        - Carrito
+      operationId: recycleCart
+      summary: Acción de reciclaje del carrito
+      description:
+        Operación de mutación del carrito (reciclar productos/promociones
+        del pedido). Descubierta en el bundle de la SPA; no verificada en vivo por
+        ser mutante. `accion` toma los mismos valores de flujo (ORDENAR, desplegar…).
+      parameters:
+        - name: folioPedido
+          in: query
+          required: true
+          description: Folio del pedido.
+          schema:
+            type: string
+          example: "4830000"
+        - name: accion
+          in: query
+          required: true
+          description: Acción de reciclaje.
+          schema:
+            type: string
+          example: ORDENAR
+        - name: reciclar
+          in: query
+          required: true
+          description: Bandera de reciclaje.
+          schema:
+            type: string
+          example: S
+        - name: usuarioOk
+          in: query
+          required: true
+          description: Kit de la consultora.
+          schema:
+            type: string
+          example: "1234567"
+      responses:
+        "200":
+          description: Sobre genérico de resultado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TipoEnvelope"
+              example:
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /postAceptarPedido:
+    post:
+      tags:
+        - Carrito
+      operationId: acceptOrder
+      summary: Aceptar / aplicar pedido
+      description:
+        Aplica el pedido (se usa para reaplicar un pedido de catálogo).
+        Descubierto en el bundle de la SPA; no verificado en vivo por ser mutante.
+      requestBody:
+        description: Pedido a aceptar.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                idPedidoAplicar:
+                  type: string
+                  description: Pedido a aplicar.
+                  example: "8900000"
+                almacen:
+                  type: string
+                  description: Almacén.
+                  example: "02"
+                idioma:
+                  type: string
+                  description: 0 español / 1 inglés.
+                  example: "0"
+              required:
+                - idPedidoAplicar
+                - almacen
+                - idioma
+            example:
+              idPedidoAplicar: "8900000"
+              almacen: "02"
+              idioma: "0"
+      responses:
+        "200":
+          description: Resultado de la aplicación.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description:
+                      Mensaje ("497"/"498"/"499" son sesiones/codes de
+                      control).
+                    example: ""
+                  messageCode:
+                    type: string
+                    description: Código de mensaje.
+                    example: ""
+                  typeMessage:
+                    type: string
+                    description: '"success"/"error".'
+                    example: success
+                  messagess:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        typeMessage:
+                          type: string
+                          description: Tipo por renglón.
+                          example: error
+                        message:
+                          type: string
+                          description: Mensaje por renglón.
+                          example: ""
+                    description: Mensajes por renglón del pedido.
+                required:
+                  - typeMessage
+              example:
+                message: ""
+                messageCode: ""
+                typeMessage: success
+                messagess: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /postContratoActualiza:
+    post:
+      tags:
+        - Perfil de consultora
+      operationId: getConsultantProfile
+      summary: Leer / actualizar datos de la consultora
+      description:
+        'Con `accion: ""` devuelve la ficha completa de la consultora (la
+        usan data-scrapper y la SPA); con `accion: "CONTINUAR"/"TERMINAR"` y los campos
+        de la ficha actualiza el contrato. Requiere la cabecera `Dominio`. Fuente:
+        data-scrapper + bundle de la SPA. Verificado en vivo (lectura).'
+      parameters:
+        - name: Dominio
+          in: header
+          required: true
+          description: Dominio del sitio (p. ej. carrito.terramarbrands.com.mx).
+          schema:
+            type: string
+          example: carrito.terramarbrands.com.mx
+      requestBody:
+        description: Acción y kit.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accion:
+                  type: string
+                  description: '"" para leer; "CONTINUAR"/"TERMINAR" para actualizar.'
+                  example: ""
+                usuarioOK:
+                  type: string
+                  description: Kit de la consultora.
+                  example: "1234567"
+              required:
+                - accion
+                - usuarioOK
+            example:
+              accion: ""
+              usuarioOK: "1234567"
+      responses:
+        "200":
+          description: Ficha de la consultora (lectura).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsultantProfile"
+              example:
+                usuarioOK: "1234567"
+                nombre: EJEMPLO
+                paterno: EJEMPLO
+                materno: EJEMPLO
+                rfc: XAXX010101000
+                sexo: Femenino
+                fechaNac: "1990-01-01"
+                estado: "00"
+                estadoDescri: Estado de ejemplo
+                email: ejemplo@ejemplo.com
+                cp: "00000"
+                entreCalle: ""
+                yLaCalle: ""
+                telefonoCasa: "0000000000"
+                celular: "0000000000"
+                telefonoOficina: ""
+                colonia: EJEMPLO
+                calle: CALLE EJEMPLO
+                numeroExterior: "0"
+                numeroInterior: ""
+                edificio: ""
+                lote: ""
+                depCasa: ""
+                manzana: ""
+                kitPatrocinadora: "0000000"
+                nombrePatrocinadora: EJEMPLO
+                accionSiguiente: ""
+                accionSiguienteMensaje: ""
+                mensajeValidacionDatos: ""
+                tipoMensaje: exito
+                mensaje: ""
+                listaColonias: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /postContrato:
+    post:
+      tags:
+        - Perfil de consultora
+      operationId: signContract
+      summary: Firmar / validar contrato de alta (MX)
+      description:
+        'Alta/validación del contrato de la consultora en el flujo de la
+        SPA (`accion: "TERMINAR"`). Descubierto en el bundle de la SPA; no verificado
+        en vivo por ser mutante. Envía la ficha completa más los campos de alta.'
+      requestBody:
+        description: Ficha de alta.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accion:
+                  type: string
+                  description: Etapa del flujo ("TERMINAR" al firmar).
+                  example: TERMINAR
+                usuarioOK:
+                  type: string
+                  description: Kit de la consultora.
+                  example: "1234567"
+                kitPatrocinadora:
+                  type: string
+                  description: Kit de la patrocinadora.
+                  example: "0000000"
+                pais:
+                  type: string
+                  description: País.
+                  example: MEXICO
+                nombres:
+                  type: string
+                  description: Nombre(s).
+                  example: EJEMPLO
+                apellido1:
+                  type: string
+                  description: Apellido paterno.
+                  example: EJEMPLO
+                apellido2:
+                  type: string
+                  description: Apellido materno.
+                  example: EJEMPLO
+                fechaNacAnio:
+                  type: string
+                  description: Año de nacimiento.
+                  example: "1984"
+                fechaNacMes:
+                  type: string
+                  description: Mes de nacimiento.
+                  example: 08
+                fechaNacDia:
+                  type: string
+                  description: Día de nacimiento.
+                  example: "03"
+                genero:
+                  type: string
+                  description: Género.
+                  example: Femenino
+                direccion1:
+                  type: string
+                  description: Calle.
+                  example: CALLE EJEMPLO
+                direccion2:
+                  type: string
+                  description: Entre calles.
+                  example: ""
+                yCalle:
+                  type: string
+                  description: Y calle.
+                  example: ""
+                ciudad:
+                  type: string
+                  description: Ciudad.
+                  example: EJEMPLO
+                estado:
+                  type: string
+                  description: Entidad federativa.
+                  example: MICH
+                CP:
+                  type: string
+                  description: Código postal.
+                  example: "00000"
+                celular:
+                  type: string
+                  description: Celular.
+                  example: "0000000000"
+                email:
+                  type: string
+                  description: Correo.
+                  example: ejemplo@ejemplo.com
+                colonia:
+                  type: string
+                  description: Colonia.
+                  example: EJEMPLO
+                acepto:
+                  type: string
+                  description: '"S" si acepta los términos, "N" si no.'
+                  example: S
+                idioma:
+                  type: string
+                  description: 0 español / 1 inglés.
+                  example: "0"
+                idPreCont:
+                  type: string
+                  description: Precontrato previo.
+                  example: ""
+              required:
+                - accion
+                - usuarioOK
+                - acepto
+            example:
+              accion: TERMINAR
+              usuarioOK: "1234567"
+              kitPatrocinadora: "0000000"
+              pais: MEXICO
+              nombres: EJEMPLO
+              apellido1: EJEMPLO
+              apellido2: EJEMPLO
+              fechaNacAnio: "1990"
+              fechaNacMes: "01"
+              fechaNacDia: "01"
+              genero: Femenino
+              direccion1: CALLE EJEMPLO
+              direccion2: ""
+              yCalle: ""
+              ciudad: EJEMPLO
+              estado: MICH
+              CP: "00000"
+              celular: "0000000000"
+              email: ejemplo@ejemplo.com
+              colonia: EJEMPLO
+              acepto: S
+              idioma: "0"
+              idPreCont: ""
+      responses:
+        "200":
+          description: Resultado de la validación/firma.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    description: Mensaje de resultado.
+                    example: ""
+                  mensajeValidacionDatos:
+                    type: string
+                    description: '"*** Datos correctos ***" cuando la ficha pasa validación.'
+                    example: "*** Datos correctos ***"
+                  nombrePatrocinadora:
+                    type: string
+                    description: Nombre de la patrocinadora.
+                    example: EJEMPLO
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+              example:
+                mensaje: ""
+                mensajeValidacionDatos: "*** Datos correctos ***"
+                nombrePatrocinadora: EJEMPLO
+                tipoMensaje: exito
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getAddress:
+    get:
+      tags:
+        - Perfil de consultora
+      operationId: getShippingAddress
+      summary: Domicilios de envío del kit
+      description:
+        Domicilios de envío registrados para el kit. Descubierto en el
+        bundle de la SPA. Verificado en vivo.
+      parameters:
+        - name: kitCode
+          in: query
+          required: true
+          description: Kit de la consultora.
+          schema:
+            type: string
+          example: "1234567"
+        - name: dominio
+          in: header
+          required: false
+          description: Dominio del sitio.
+          schema:
+            type: string
+          example: carrito.terramarbrands.com.mx
+      responses:
+        "200":
+          description: Domicilios.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  getAddressResult:
+                    type: object
+                    properties:
+                      typeMessage:
+                        type: string
+                        description: '"Success" en éxito.'
+                        example: Success
+                      message:
+                        type: string
+                        description: Mensaje de error.
+                        example: ""
+                      records:
+                        type: string
+                        description: Número de renglones.
+                        example: "1"
+                      getAddvresult:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AddressRow"
+                        description: Domicilios.
+                    required:
+                      - typeMessage
+                      - getAddvresult
+                required:
+                  - getAddressResult
+              example:
+                getAddressResult:
+                  typeMessage: Success
+                  message: ""
+                  records: "1"
+                  getAddvresult:
+                    - address: "CALLE EJEMPLO No ext: 0"
+                      outdoorNum: "0"
+                      interiorNum: ""
+                      betweenStr: ""
+                      andStreet: ""
+                      postalCode: "00000"
+                      suburb: EJEMPLO
+                      municipality: EJEMPLO
+                      federalEnt: "00"
+                      packaging: ""
+                      finalClient: ""
+                      endCustName: ""
+                      endCustTel: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /postActualizarDomicilio:
+    post:
+      tags:
+        - Perfil de consultora
+      operationId: updateShippingAddress
+      summary: Actualizar domicilio de envío
+      description:
+        Actualiza el domicilio de envío del pedido. Descubierto en el bundle
+        de la SPA; no verificado en vivo por ser mutante.
+      parameters:
+        - name: dominio
+          in: header
+          required: true
+          description: Dominio del sitio.
+          schema:
+            type: string
+          example: carrito.terramarbrands.com.mx
+      requestBody:
+        description: Domicilio nuevo.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                soloPaqueteria:
+                  type: string
+                  description: 1 si solo cambia paquetería.
+                  example: "0"
+                usuarioOK:
+                  type: string
+                  description: Kit de la consultora.
+                  example: "1234567"
+                folioPedido:
+                  type: string
+                  description: Folio del pedido.
+                  example: "4830000"
+                estado:
+                  type: string
+                  description: Entidad federativa.
+                  example: MICH
+                calle:
+                  type: string
+                  description: Calle.
+                  example: CALLE EJEMPLO
+                colonia:
+                  type: string
+                  description: Colonia.
+                  example: EJEMPLO
+                municipio:
+                  type: string
+                  description: Municipio.
+                  example: EJEMPLO
+                cp:
+                  type: string
+                  description: Código postal.
+                  example: "00000"
+                ocurre:
+                  type: string
+                  description: Sucursal Ocurre.
+                  example: ""
+                paqueteria:
+                  type: string
+                  description: Paquetería.
+                  example: Fedex
+                entreCalle:
+                  type: string
+                  description: Entre calle.
+                  example: ""
+                yCalle:
+                  type: string
+                  description: Y calle.
+                  example: ""
+                domicilioClienteFinalSN:
+                  type: string
+                  description: '"S"/"N" envío a cliente final.'
+                  example: N
+                domicilioClienteFinalNombre:
+                  type: string
+                  description: Nombre del cliente final.
+                  example: ""
+                domicilioClienteFinalTelefono:
+                  type: string
+                  description: Teléfono del cliente final.
+                  example: ""
+                numeroExterior:
+                  type: string
+                  description: Número exterior.
+                  example: "0"
+              required:
+                - usuarioOK
+                - folioPedido
+                - calle
+                - colonia
+                - municipio
+                - cp
+            example:
+              soloPaqueteria: "0"
+              usuarioOK: "1234567"
+              folioPedido: "4830000"
+              estado: MICH
+              calle: CALLE EJEMPLO
+              colonia: EJEMPLO
+              municipio: EJEMPLO
+              cp: "00000"
+              ocurre: ""
+              paqueteria: Fedex
+              entreCalle: ""
+              yCalle: ""
+              domicilioClienteFinalSN: N
+              domicilioClienteFinalNombre: ""
+              domicilioClienteFinalTelefono: ""
+              numeroExterior: "0"
+      responses:
+        "200":
+          description: Sobre genérico de resultado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TipoEnvelope"
+              example:
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /postCambiarContrasenia:
+    post:
+      tags:
+        - Perfil de consultora
+      operationId: changePassword
+      summary: Cambiar contraseña
+      description:
+        Cambio de contraseña de la consultora. Descubierto en el bundle
+        de la SPA; no verificado en vivo por ser mutante.
+      requestBody:
+        description: Cambio de contraseña.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accion:
+                  type: string
+                  description: Fijo "CONTINUAR".
+                  example: CONTINUAR
+                usuarioOK:
+                  type: string
+                  description: Kit de la consultora.
+                  example: "1234567"
+                contrasenia:
+                  type: string
+                  description: Contraseña actual.
+                  example: "********"
+                contraseniaNueva:
+                  type: string
+                  description: Contraseña nueva.
+                  example: "********"
+                contraseniaNueva2:
+                  type: string
+                  description: Confirmación de la nueva.
+                  example: "********"
+              required:
+                - accion
+                - usuarioOK
+                - contrasenia
+                - contraseniaNueva
+                - contraseniaNueva2
+            example:
+              accion: CONTINUAR
+              usuarioOK: "1234567"
+              contrasenia: "********"
+              contraseniaNueva: "********"
+              contraseniaNueva2: "********"
+      responses:
+        "200":
+          description: Sobre genérico de resultado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TipoEnvelope"
+              example:
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /PostValidarMail:
+    post:
+      tags:
+        - Perfil de consultora
+      operationId: validateEmailToken
+      summary: Validar token de correo
+      description:
+        Valida el token de confirmación de correo. Descubierto en el bundle
+        de la SPA; no verificado en vivo.
+      requestBody:
+        description: Token a validar.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                idioma:
+                  type: string
+                  description: 0 español / 1 inglés.
+                  example: "0"
+                token:
+                  type: string
+                  description: Token recibido por correo.
+                  example: eyJhbGciOi...
+              required:
+                - idioma
+                - token
+            example:
+              idioma: "0"
+              token: eyJhbGciOi...
+      responses:
+        "200":
+          description: Resultado de la validación.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  typeMessage:
+                    type: string
+                    description: '"success"/"error".'
+                    example: success
+                  message:
+                    type: string
+                    description: Mensaje.
+                    example: ""
+              example:
+                typeMessage: success
+                message: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getPremios:
+    get:
+      tags:
+        - Premios y bonos
+      operationId: listAwards
+      summary: Premios del periodo del kit
+      description:
+        "Premios ganados/elegibles del kit. Fuente: catalog-scrapper. Verificado
+        en vivo (respuesta sin premios: sobre con `getdescIntvresult` vacío)."
+      parameters:
+        - name: Kit
+          in: query
+          required: true
+          description: Kit de la consultora (usuarioOK).
+          schema:
+            type: string
+          example: "1234567"
+      responses:
+        "200":
+          description: Premios.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domicilio:
+                    type: string
+                    description: Domicilio de envío en una línea.
+                    example: "CALLE EJEMPLO No ext: 0"
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: '"No existen premios para ese kit" cuando no aplica.'
+                    example: ""
+                  getdescIntvresult:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Award"
+                    description: Premios del periodo.
+                required:
+                  - tipoMensaje
+                  - getdescIntvresult
+              example:
+                domicilio: "CALLE EJEMPLO No ext: 0"
+                tipoMensaje: error
+                mensaje: No existen premios para ese kit
+                getdescIntvresult: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /postPremios:
+    post:
+      tags:
+        - Premios y bonos
+      operationId: selectAward
+      summary: Elegir premio del periodo
+      description:
+        Registra la elección de premios. Descubierto en el bundle de la
+        SPA; no verificado en vivo por ser mutante. La respuesta exitosa llega como
+        `postPremiosRes.mensaje = "Procesado ok" (o "Procesado ok ambiente:pruebas").
+      requestBody:
+        description: Elección de premios.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kit:
+                  type: string
+                  description: Kit (vacío en la SPA).
+                  example: ""
+                premioarr1:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      premio:
+                        type: string
+                        description: Clave del premio elegido.
+                        example: "89101"
+                      premioaElegir:
+                        type: string
+                        description: Premio a elegir del renglón.
+                        example: "89101"
+                    required:
+                      - premio
+                      - premioaElegir
+                  description: Renglones premio/elegido.
+              required:
+                - premioarr1
+            example:
+              kit: ""
+              premioarr1:
+                - premio: "89101"
+                  premioaElegir: "89101"
+      responses:
+        "200":
+          description: Resultado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  postPremiosRes:
+                    type: object
+                    properties:
+                      mensaje:
+                        type: string
+                        description: '"Procesado ok" en éxito.'
+                        example: Procesado ok
+                    required:
+                      - mensaje
+                required:
+                  - postPremiosRes
+              example:
+                postPremiosRes:
+                  mensaje: Procesado ok
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /GetBonosEtapaUno:
+    get:
+      tags:
+        - Premios y bonos
+      operationId: getBonosEtapaUno
+      summary: Bonos etapa uno
+      description:
+        "Bonos de la etapa 1 del periodo. Descubierto en el bundle de la
+        SPA. Verificado en vivo (sin bonos: sobre con messageCode 409)."
+      responses:
+        "200":
+          description: Bonos etapa 1.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TypeMessageEnvelope"
+              example:
+                typeMessage: Conflict
+                message: No se encontraron resultados
+                messageCode: 409
+                data: null
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /GetBonosEtapaDos:
+    get:
+      tags:
+        - Premios y bonos
+      operationId: getBonosEtapaDos
+      summary: Bonos etapa dos
+      description:
+        "Bonos de la etapa 2 del periodo. Descubierto en el bundle de la
+        SPA. Verificado en vivo (sin bonos: sobre con messageCode 409)."
+      responses:
+        "200":
+          description: Bonos etapa 2.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TypeMessageEnvelope"
+              example:
+                typeMessage: Conflict
+                message: No se encontraron resultados
+                messageCode: 409
+                data: null
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /GetSiVale:
+    get:
+      tags:
+        - Premios y bonos
+      operationId: getSiValeCard
+      summary: Estado de la tarjeta SiVale
+      description:
+        "Tarjeta SiVale registrada de la consultora. Descubierto en el
+        bundle de la SPA. Verificado en vivo (sin tarjeta: sobre con messageCode 409);
+        con tarjeta `data` incluye `estatus` (1 activa) y `numTarjeta`."
+      responses:
+        "200":
+          description: Estado de la tarjeta SiVale.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  typeMessage:
+                    type: string
+                    description: '"success"/"Conflict".'
+                    example: Conflict
+                  message:
+                    type: string
+                    description: Mensaje ("No se encontro Tarjeta").
+                    example: ""
+                  messageCode:
+                    type: number
+                    description: Código (200, 409…).
+                    example: 409
+                  data:
+                    type:
+                      - object
+                      - "null"
+                    properties:
+                      estatus:
+                        type: string
+                        description: 1 = tarjeta activa.
+                        example: "1"
+                      numTarjeta:
+                        type: string
+                        description: Número de tarjeta en grupos de 4.
+                        example: "0000000000000000"
+              example:
+                typeMessage: Conflict
+                message: No se encontro Tarjeta
+                messageCode: 409
+                data: null
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getFacturas:
+    get:
+      tags:
+        - Pedidos y facturación
+      operationId: listInvoices
+      summary: Facturas de la consultora
+      description:
+        "Facturas CFDI con URLs de PDF/XML. Fuente: orders-scrapper. Verificado
+        en vivo."
+      parameters:
+        - name: usuarioOK
+          in: query
+          required: true
+          description:
+            Kit de la consultora (la SPA de órdenes lo manda vacío y resuelve
+            por token).
+          schema:
+            type: string
+          example: "1234567"
+      responses:
+        "200":
+          description: Facturas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: ""
+                  facturas:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Invoice"
+                    description: Facturas.
+                required:
+                  - tipoMensaje
+                  - facturas
+              example:
+                tipoMensaje: exito
+                mensaje: ""
+                facturas:
+                  - referencia: "8720000"
+                    folioReal: F7290000
+                    archivoPdf: Factura-F7290000.pdf
+                    archivoXml: Factura-F7290000.xml
+                    rutaPdf: https://docs.terramarbrands.com.mx/invoices/Factura-F7290000.pdf
+                    rutaXml: https://docs.terramarbrands.com.mx/invoices/Factura-F7290000.xml
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /GetInvoices:
+    get:
+      tags:
+        - Pedidos y facturación
+      operationId: getInvoices
+      summary: Facturas por mes (GetInvoices)
+      description:
+        "Facturas emitidas de la consultora para el mes indicado. La SPA
+        llama `GET /GetInvoices?Axo=<año>&Mes=<mes>&Idioma=<0|1>` con el token Bearer.
+        Verificado en vivo (2026-10-18): responde `{ Invoices: [...], message, typeMessage
+        }`; cada factura trae estatus, fecha, folio, pedido, total y URL de PDF/XML."
+      parameters:
+        - name: Axo
+          in: query
+          required: true
+          description: Año (4 dígitos).
+          schema:
+            type: string
+          example: "2026"
+        - name: Mes
+          in: query
+          required: true
+          description: Mes (1–12).
+          schema:
+            type: string
+          example: "10"
+        - name: Idioma
+          in: query
+          required: true
+          description: "Idioma de los mensajes: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+      responses:
+        "200":
+          description: Sobre con facturas del mes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Invoices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        estatus:
+                          type: string
+                          description: Estatus de la factura.
+                        fecha:
+                          type: string
+                          description: Fecha de emisión.
+                        noFactura:
+                          type: string
+                          description: Número de factura.
+                        noPedido:
+                          type: string
+                          description: Número de pedido asociado.
+                        nombreDocumento:
+                          type: string
+                          description: Nombre del documento.
+                        totalFactura:
+                          type: string
+                          description: Total facturado.
+                        url:
+                          type: string
+                          description: URL del PDF.
+                        urlXML:
+                          type: string
+                          description: URL del XML.
+                  message:
+                    type: string
+                  typeMessage:
+                    type: string
+                    description: success / error.
+              example:
+                Invoices:
+                  - estatus: A
+                    fecha: "2026-10-01"
+                    noFactura: A-000000
+                    noPedido: "0000000"
+                    nombreDocumento: FACTURA-0000000000
+                    totalFactura: "0.00"
+                    url: https://example.invalid/factura.pdf
+                    urlXML: https://example.invalid/factura.xml
+                message: ""
+                typeMessage: success
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getEmbarques:
+    get:
+      tags:
+        - Pedidos y facturación
+      operationId: listShipments
+      summary: Embarques del periodo actual
+      description:
+        "Pedidos embarcados de los últimos 60 días (rango devuelto como
+        fechaInicio/fechaFin). Fuente: orders-scrapper. Verificado en vivo."
+      parameters:
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: dominio
+          in: query
+          required: true
+          description: Dominio del sitio.
+          schema:
+            type: string
+          example: carrito.terramarbrands.com.mx
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+      responses:
+        "200":
+          description: Embarques.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuarioOK:
+                    type: string
+                    description: Echo del kit.
+                    example: "1234567"
+                  fechaInicio:
+                    type: string
+                    description: Inicio del rango (aaaammdd).
+                    example: "20260818"
+                  fechaFin:
+                    type: string
+                    description: Fin del rango (aaaammdd).
+                    example: "20261017"
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: ""
+                  pedidos:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Shipment"
+                    description: Embarques.
+                required:
+                  - tipoMensaje
+                  - pedidos
+              example:
+                usuarioOK: "1234567"
+                fechaInicio: "20260818"
+                fechaFin: "20261017"
+                tipoMensaje: exito
+                mensaje: ""
+                pedidos:
+                  - pedido: "8900000"
+                    caja: "1"
+                    poblacion: EJEMPLO
+                    peso: "0"
+                    piezas: "0"
+                    fechaFacturacion: 01-01-2026
+                    fechaSurtido: 01-01-2026
+                    paqueteria: Paquete Express
+                    guia: GDL02EXA000000
+                    link: https://www.paquetexpress.com.mx/rastreo?guia=GDL02EXA000000
+                    foto: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getEstadoCuenta:
+    get:
+      tags:
+        - Pedidos y facturación
+      operationId: getAccountStatus
+      summary: Estado de cuenta (3 meses)
+      description:
+        "Saldo y movimientos de los últimos 3 meses (mes1/mes2/mes3 con
+        sus movimientos). Fuente: orders-scrapper. Verificado en vivo."
+      parameters:
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: dominio
+          in: query
+          required: true
+          description: Dominio del sitio.
+          schema:
+            type: string
+          example: carrito.terramarbrands.com.mx
+      responses:
+        "200":
+          description: Estado de cuenta.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuarioOK:
+                    type: string
+                    description: Echo del kit.
+                    example: "1234567"
+                  categoria:
+                    type: string
+                    description: Categoría de la consultora.
+                    example: Consultora Independiente
+                  saldo:
+                    type: string
+                    description: Saldo actual (MXN, cadena).
+                    example: "0.01"
+                  mes1:
+                    type: string
+                    description: Etiqueta del mes 1.
+                    example: Octubre
+                  mes2:
+                    type: string
+                    description: Etiqueta del mes 2.
+                    example: Septiembre
+                  mes3:
+                    type: string
+                    description: Etiqueta del mes 3.
+                    example: Agosto
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: ""
+                  movimientosMes1:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccountMovement"
+                    description: Movimientos del mes 1.
+                  movimientosMes2:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccountMovement"
+                    description: Movimientos del mes 2.
+                  movimientosMes3:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccountMovement"
+                    description: Movimientos del mes 3.
+                required:
+                  - tipoMensaje
+              example:
+                usuarioOK: "1234567"
+                categoria: Consultora Independiente
+                saldo: "0.01"
+                mes1: Octubre
+                mes2: Septiembre
+                mes3: Agosto
+                tipoMensaje: exito
+                mensaje: ""
+                movimientosMes1:
+                  - fechaProceso: 1/1/2026
+                    descri: Pedido
+                    pedido: "004150000"
+                    monto: "1000.00"
+                    letraA: "580.00"
+                    modulos: "1.00"
+                    almacen: Envio a Domicilio
+                    guia: N/A
+                    paqueteria: N/A
+                    enlaceRastreo: ""
+                movimientosMes2: []
+                movimientosMes3: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getPedidosCatalogo:
+    get:
+      tags:
+        - Pedidos y facturación
+      operationId: listCatalogOrders
+      summary: Pedidos de catálogo digital por periodo
+      description:
+        "Pedidos del catálogo digital del año/mes. Descubierto en el bundle
+        de la SPA. Verificado en vivo (periodo sin pedidos: messageCode 204)."
+      parameters:
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+        - name: axo
+          in: query
+          required: true
+          description: Año (4 dígitos).
+          schema:
+            type: string
+          example: "2026"
+        - name: mes
+          in: query
+          required: true
+          description: Mes (1–12).
+          schema:
+            type: string
+          example: "10"
+      responses:
+        "200":
+          description: Pedidos del periodo.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Mensaje ("No existen pedidos en este periodo").
+                    example: ""
+                  messageCode:
+                    type: number
+                    description: Código (200, 204…).
+                    example: 200
+                  pedido:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        idPedido:
+                          type: string
+                          description: Id del pedido (para /getDetallePedidoCatalogo).
+                          example: "8900000"
+                      required:
+                        - idPedido
+                    description: Pedidos del periodo.
+                  typeMessage:
+                    type: string
+                    description: '"success"/"error".'
+                    example: success
+              example:
+                message: No existen pedidos en este periodo
+                messageCode: 204
+                pedido: []
+                typeMessage: error
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getDetallePedidoCatalogo:
+    get:
+      tags:
+        - Pedidos y facturación
+      operationId: getCatalogOrderDetail
+      summary: Detalle de un pedido de catálogo digital
+      description:
+        Detalle de un pedido de catálogo digital. Descubierto en el bundle
+        de la SPA; no verificado en vivo (la cuenta no tenía pedidos en el periodo
+        probado).
+      parameters:
+        - name: idPedido
+          in: query
+          required: true
+          description: Id del pedido (de /getPedidosCatalogo).
+          schema:
+            type: string
+          example: "8900000"
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+      responses:
+        "200":
+          description: Detalle del pedido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  typeMessage:
+                    type: string
+                    description: '"success"/"error".'
+                    example: success
+                  message:
+                    type: string
+                    description: Mensaje.
+                    example: ""
+                  detalle:
+                    type: array
+                    items:
+                      description:
+                        Renglones del pedido (objetos sueltos del servicio
+                        WCF).
+                    description: Renglones.
+                required:
+                  - typeMessage
+              example:
+                typeMessage: success
+                message: ""
+                detalle: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getBranch:
+    get:
+      tags:
+        - Linaje
+      operationId: getBranchStatus
+      summary: Estado de rama por año/mes
+      description:
+        "Estado de la rama (linaje) de la consultora para un año/mes, con
+        totales por directas/indirectas/USA y listas de consultoras (vacías cuando
+        no hay linaje). Fuente: data-scrapper. Verificado en vivo."
+      parameters:
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: opcion
+          in: query
+          required: true
+          description: Fijo "PREBRANCH".
+          schema:
+            type: string
+          example: PREBRANCH
+        - name: anio
+          in: query
+          required: true
+          description: Año (4 dígitos).
+          schema:
+            type: string
+          example: "2026"
+        - name: mes
+          in: query
+          required: true
+          description: Mes (1–12).
+          schema:
+            type: string
+          example: "10"
+        - name: dominio
+          in: query
+          required: true
+          description: Dominio del sitio.
+          schema:
+            type: string
+          example: carrito.terramarbrands.com.mx
+      responses:
+        "200":
+          description: Estado de rama.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuarioOK:
+                    type: string
+                    description: Echo del kit.
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: ""
+                  preBranch:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BranchStatus"
+                    description: Renglón de estado de rama.
+                  listaGC:
+                    type: array
+                    items:
+                      description:
+                        Consultoras del grupo cerrado (objetos sueltos
+                        del servicio WCF).
+                  listaPatrocinando:
+                    type: array
+                    items:
+                      description: Consultoras patrocinando.
+                  listaPorPerder:
+                    type: array
+                    items:
+                      description: Consultoras por perder.
+                  listaPorReactivarRetener:
+                    type: array
+                    items:
+                      description: Consultoras por reactivar/retener.
+                  listaPorPerderProxMes:
+                    type: array
+                    items:
+                      description: Consultoras por perder el próximo mes.
+                required:
+                  - tipoMensaje
+                  - preBranch
+              example:
+                usuarioOK: ""
+                tipoMensaje: exito
+                mensaje: ""
+                preBranch:
+                  - anio: "2026"
+                    mes: "10"
+                    linea: "0"
+                    kit: "1234567"
+                    nombre: EJEMPLO EJEMPLO
+                    categoria: CI
+                    activas: "0"
+                    ordenandoGC: "0"
+                    ordenandoDirectas: "0"
+                    modulosGC: "1.00"
+                    patrociniosDirectos: "0"
+                    patrociniosIndirectos: "0"
+                    totalPatrocinios: "0"
+                    consultorasDirectasPatrocinando: "0"
+                    consultorasIndirectasPatrocinando: "0"
+                    totalConsultorasPatrocinando: "0"
+                    consultorasPorPerder: "0"
+                    gruposCerrando: "0"
+                    directasUSA: "0"
+                    indirectasUSA: "0"
+                    pais: "0"
+                    paisDescri: ""
+                    modulosMX: "1.00"
+                    modulosUS: "0.00"
+                    modulosElla: "0.00"
+                listaGC: []
+                listaPatrocinando: []
+                listaPorPerder: []
+                listaPorReactivarRetener: []
+                listaPorPerderProxMes: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getEstadoCuenta_Linaje:
+    get:
+      tags:
+        - Linaje
+      operationId: listLineageKits
+      summary: Kits del linaje (paginado)
+      description:
+        'Kits del linaje de la consultora, paginado 1-based con `pageno`;
+        iterar hasta `tipoMensaje != "exito"`, `listaKits` vacía o tope propio. Fuente:
+        data-scrapper. Verificado en vivo (respuesta "No tiene linaje").'
+      parameters:
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: pageno
+          in: query
+          required: true
+          description: Página (1-based).
+          schema:
+            type: string
+          example: "1"
+      responses:
+        "200":
+          description: Kits del linaje.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuarioOK:
+                    type: string
+                    description: Echo del kit.
+                  count:
+                    type: string
+                    description: Renglones de la página.
+                    example: "0"
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito; "error" con "No tiene linaje".'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: No tiene linaje
+                  listaKits:
+                    type: array
+                    items:
+                      description: Kit del linaje (objetos sueltos del servicio WCF).
+                    description: Kits del linaje.
+                required:
+                  - tipoMensaje
+                  - listaKits
+              example:
+                usuarioOK: ""
+                count: "0"
+                tipoMensaje: error
+                mensaje: No tiene linaje
+                listaKits: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getBranchSolicitar:
+    get:
+      tags:
+        - Linaje
+      operationId: requestBranchActive
+      summary: Solicitar linaje (rama activa)
+      description:
+        Petición de linaje para la rama activa. Descubierto en el bundle
+        de la SPA. Verificado en vivo (con `accion` inválida responde "Accion en Solicitud
+        inválida").
+      parameters:
+        - name: accion
+          in: query
+          required: true
+          description: Acción de la solicitud.
+          schema:
+            type: string
+          example: SOLICITAR
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+        - name: anioMes
+          in: query
+          required: true
+          description: Periodo (aaaamm).
+          schema:
+            type: string
+          example: "202610"
+      responses:
+        "200":
+          description: Resultado de la solicitud.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuarioOK:
+                    type: string
+                    description: Echo del kit.
+                  anioMes01:
+                    type: string
+                    description: Periodo resultante 1.
+                    example: ""
+                  anioMes02:
+                    type: string
+                    description: Periodo resultante 2.
+                    example: ""
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: ""
+                required:
+                  - tipoMensaje
+              example:
+                usuarioOK: ""
+                anioMes01: ""
+                anioMes02: ""
+                tipoMensaje: error
+                mensaje: Accion en Solicitud inválida
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getBranchSolicitar2:
+    get:
+      tags:
+        - Linaje
+      operationId: requestBranchInactive
+      summary: Solicitar linaje (rama inactiva)
+      description:
+        Variante de /getBranchSolicitar para ramas inactivas (la SPA la
+        selecciona cuando `type === "inactive"`). Descubierto en el bundle de la SPA.
+      parameters:
+        - name: accion
+          in: query
+          required: true
+          description: Acción de la solicitud.
+          schema:
+            type: string
+          example: SOLICITAR
+        - name: usuarioOK
+          in: query
+          required: true
+          description: Kit de la consultora (usuario sin el prefijo "TE").
+          schema:
+            type: string
+          example: "1234567"
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+        - name: anioMes
+          in: query
+          required: true
+          description: Periodo (aaaamm).
+          schema:
+            type: string
+          example: "202610"
+      responses:
+        "200":
+          description: Resultado de la solicitud.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuarioOK:
+                    type: string
+                    description: Echo del kit.
+                  anioMes01:
+                    type: string
+                    description: Periodo resultante 1.
+                    example: ""
+                  anioMes02:
+                    type: string
+                    description: Periodo resultante 2.
+                    example: ""
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: ""
+                required:
+                  - tipoMensaje
+              example:
+                usuarioOK: ""
+                anioMes01: ""
+                anioMes02: ""
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getMisAtenciones:
+    get:
+      tags:
+        - Atenciones
+      operationId: listAtenciones
+      summary: Tickets de atención
+      description:
+        Historial de tickets de atención de la consultora. Descubierto
+        en el bundle de la SPA. Verificado en vivo (cuenta sin tickets).
+      parameters:
+        - name: orderby
+          in: query
+          required: false
+          description: Campo de orden ("folio").
+          schema:
+            type: string
+          example: folio
+        - name: order
+          in: query
+          required: false
+          description: Dirección ("desc"/"asc").
+          schema:
+            type: string
+          example: desc
+      responses:
+        "200":
+          description: Tickets.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: string
+                    description: Total de tickets.
+                    example: "0"
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error ("498"/"499" = sesión).
+                    example: ""
+                  atenciones:
+                    type: array
+                    items:
+                      description:
+                        Ticket de atención (objetos sueltos del servicio
+                        WCF; incluyen folio, kit afectado y comentarios).
+                    description: Tickets.
+                required:
+                  - tipoMensaje
+                  - atenciones
+              example:
+                count: "0"
+                tipoMensaje: exito
+                mensaje: ""
+                atenciones: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getMisAtencionesComentarios:
+    get:
+      tags:
+        - Atenciones
+      operationId: listAtencionComments
+      summary: Comentarios de un ticket
+      description:
+        Comentarios de un ticket de atención por folio. Descubierto en
+        el bundle de la SPA. No verificado en vivo (sin tickets).
+      parameters:
+        - name: folio
+          in: query
+          required: true
+          description: Folio del ticket.
+          schema:
+            type: string
+          example: "000000"
+      responses:
+        "200":
+          description: Comentarios.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comentarios:
+                    type: array
+                    items:
+                      description:
+                        Comentario del ticket (objetos sueltos del servicio
+                        WCF).
+                    description: Comentarios.
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: ""
+                required:
+                  - tipoMensaje
+              example:
+                comentarios: []
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /postAtencionesAlta:
+    post:
+      tags:
+        - Atenciones
+      operationId: createAtencion
+      summary: Abrir ticket de atención
+      description:
+        Abre un ticket de atención (con imagen opcional en base64). Descubierto
+        en el bundle de la SPA; no verificado en vivo por ser mutante. En éxito devuelve
+        `dato1` con el folio nuevo.
+      requestBody:
+        description: Ticket nuevo.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comentarios:
+                  type: string
+                  description: Descripción del problema.
+                  example: EJEMPLO
+                imagenBase64:
+                  type: string
+                  description:
+                    Imagen adjunta en base64 (data URL, segunda parte)
+                    o vacío.
+                  example: ""
+                kitaten:
+                  type: string
+                  description: Kit afectado.
+                  example: "1234567"
+                principal:
+                  type: string
+                  description: Motivo principal.
+                  example: EJEMPLO
+                principalIndex:
+                  type: string
+                  description: Índice del motivo principal.
+                  example: "1"
+                subDescri:
+                  type: string
+                  description: Submotivo.
+                  example: EJEMPLO
+                subIndex:
+                  type: string
+                  description: Índice del submotivo.
+                  example: "1"
+              required:
+                - comentarios
+                - kitaten
+                - principal
+            example:
+              comentarios: EJEMPLO
+              imagenBase64: ""
+              kitaten: "1234567"
+              principal: EJEMPLO
+              principalIndex: "1"
+              subDescri: EJEMPLO
+              subIndex: "1"
+      responses:
+        "200":
+          description: Resultado del alta.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  dato1:
+                    type: string
+                    description: Folio del ticket creado.
+                    example: "000000"
+                  mensaje:
+                    type: string
+                    description: Mensaje de error.
+                    example: ""
+              example:
+                tipoMensaje: exito
+                dato1: "000000"
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /postAtencionesAltaComentario:
+    post:
+      tags:
+        - Atenciones
+      operationId: addAtencionComment
+      summary: Comentar un ticket
+      description:
+        Agrega un comentario (con imagen opcional) a un ticket existente.
+        Descubierto en el bundle de la SPA; no verificado en vivo por ser mutante.
+      requestBody:
+        description: Comentario nuevo.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tipo:
+                  type: string
+                  description: Tipo de comentario ("0").
+                  example: "0"
+                comentarios:
+                  type: string
+                  description: Comentario.
+                  example: EJEMPLO
+                folio:
+                  type: string
+                  description: Folio del ticket.
+                  example: "000000"
+                imagenBase64:
+                  type: string
+                  description: Imagen adjunta en base64 o vacío.
+                  example: ""
+              required:
+                - comentarios
+                - folio
+            example:
+              tipo: "0"
+              comentarios: EJEMPLO
+              folio: "000000"
+              imagenBase64: ""
+      responses:
+        "200":
+          description: Sobre genérico de resultado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TipoEnvelope"
+              example:
+                tipoMensaje: exito
+                mensaje: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getViaje:
+    get:
+      tags:
+        - Viaje
+      operationId: getTravelInfo
+      summary: Viaje del periodo (nacional/internacional)
+      description:
+        "Información del viaje (incentivo) del periodo. Descubierto en
+        el bundle de la SPA. Verificado en vivo (sin resultados: sobre con messageCode
+        409; `data` incluye `Detalle` y `Patrocinios` cuando aplica)."
+      parameters:
+        - name: usuarioOk
+          in: query
+          required: true
+          description: Kit de la consultora.
+          schema:
+            type: string
+          example: "1234567"
+        - name: viaje
+          in: query
+          required: true
+          description: N = nacional, I = internacional.
+          schema:
+            type: string
+            enum:
+              - N
+              - I
+          example: N
+      responses:
+        "200":
+          description: Viaje del periodo.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  typeMessage:
+                    type: string
+                    description: '"success"/"409".'
+                    example: success
+                  message:
+                    type: string
+                    description: Mensaje.
+                    example: ""
+                  messageCode:
+                    type: number
+                    description: Código (200, 409…).
+                    example: 200
+                  data:
+                    type:
+                      - object
+                      - "null"
+                    properties:
+                      Detalle:
+                        type: array
+                        items:
+                          description:
+                            Detalle del viaje (objetos sueltos del servicio
+                            WCF).
+                      Patrocinios:
+                        type: array
+                        items:
+                          description: Patrocinios del viaje.
+              example:
+                typeMessage: "409"
+                message: No se encontraron resultados
+                messageCode: 409
+                data: null
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /getCertificados:
+    post:
+      tags:
+        - Certificados
+      operationId: listCertificates
+      summary: Certificados de la consultora
+      description:
+        'Certificados (constancias) disponibles de la consultora. Descubierto
+        en el bundle de la SPA. Verificado en vivo (sin documentos: "No hay documentos").'
+      requestBody:
+        description: Solicitud de certificados.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usuarioOK:
+                  type: string
+                  description: Kit de la consultora.
+                  example: "1234567"
+                dominio:
+                  type: string
+                  description: Dominio del sitio.
+                  example: carrito.terramarbrands.com.mx
+              required:
+                - usuarioOK
+                - dominio
+            example:
+              usuarioOK: "1234567"
+              dominio: carrito.terramarbrands.com.mx
+      responses:
+        "200":
+          description: Certificados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tipoMensaje:
+                    type: string
+                    description: '"exito" en éxito.'
+                    example: exito
+                  mensaje:
+                    type: string
+                    description: '"No hay documentos" cuando no aplica.'
+                    example: ""
+                  certificados:
+                    type: array
+                    items:
+                      description: Certificado (objetos sueltos del servicio WCF).
+                    description: Certificados.
+                required:
+                  - tipoMensaje
+                  - certificados
+              example:
+                tipoMensaje: error
+                mensaje: No hay documentos
+                certificados: []
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /GetTokenIrelandPay:
+    get:
+      tags:
+        - Pagos
+      operationId: getPaymentToken
+      summary: Token de pago hospedado (ProPay)
+      description:
+        Solicita el token para el iframe de pago hospedado de ProPay (Ireland
+        Pay). Descubierto en el bundle de la SPA; no verificado en vivo (requiere
+        un pedido en pago).
+      parameters:
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+        - name: amount
+          in: query
+          required: true
+          description: Monto a pagar.
+          schema:
+            type: string
+          example: "460.13"
+        - name: orderNumber
+          in: query
+          required: true
+          description: Número de pedido a pagar.
+          schema:
+            type: string
+          example: "4830000"
+      responses:
+        "200":
+          description: Token de pago.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Token de la sesión de pago.
+                    example: AbCdEf...
+                  message:
+                    type: string
+                    description: Mensaje.
+                    example: ""
+                  typeMessage:
+                    type: string
+                    description: '"success"/"error".'
+                    example: success
+                required:
+                  - token
+              example:
+                token: AbCdEf...
+                message: ""
+                typeMessage: success
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /GetPaymentIrelandPay:
+    get:
+      tags:
+        - Pagos
+      operationId: completePayment
+      summary: Confirmar pago y generar nuevo pedido
+      description:
+        Confirma el pago hospedado (order_token del iframe) y devuelve
+        el folio del pedido nuevo en `NewOrderNumber`. Descubierto en el bundle de
+        la SPA; no verificado en vivo.
+      parameters:
+        - name: order_token
+          in: query
+          required: true
+          description: Token de la orden de pago (iframe ProPay).
+          schema:
+            type: string
+          example: AbCdEf...
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+      responses:
+        "200":
+          description: Pago procesado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  typeMessage:
+                    type: string
+                    description: '"success"/"error".'
+                    example: success
+                  NewOrderNumber:
+                    type: string
+                    description:
+                      Folio del pedido nuevo (cookie folioPedido de la
+                      SPA).
+                    example: "4839847"
+                  message:
+                    type: string
+                    description: Mensaje.
+                    example: ""
+              example:
+                typeMessage: success
+                NewOrderNumber: "4839847"
+                message: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"
+  /GetFichaTecnicaProducto:
+    get:
+      tags:
+        - Producto
+      operationId: getProductDatasheet
+      summary: Ficha técnica de producto
+      description:
+        'Ficha técnica (características) de un producto por clave. Descubierto
+        en el bundle de la SPA. NOTA: en la verificación en vivo (2026-10-18) el servicio
+        de producción MX respondió 404 "Extremo no encontrado" para esta ruta; se
+        documenta por estar referenciada en el bundle de la SPA.'
+      parameters:
+        - name: idProducto
+          in: query
+          required: true
+          description: Clave del producto.
+          schema:
+            type: string
+          example: A
+        - name: idioma
+          in: query
+          required: false
+          description: "Idioma: 0 = español, 1 = inglés."
+          schema:
+            type: string
+            enum:
+              - "0"
+              - "1"
+          example: "0"
+      responses:
+        "200":
+          description: Ficha técnica.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  listaCaracteristicas:
+                    type: array
+                    items:
+                      description:
+                        Característica de la ficha (objetos sueltos del
+                        servicio WCF).
+                    description: Características.
+                  typeMessage:
+                    type: string
+                    description: '"success"/"error".'
+                    example: success
+                  message:
+                    type: string
+                    description: Mensaje.
+                    example: ""
+              example:
+                listaCaracteristicas: []
+                typeMessage: success
+                message: ""
+        "404":
+          $ref: "#/components/responses/EndpointNotFound"

@@ -6,6 +6,6 @@
     "format:check": "prettier --check docs/index.html docs/openapi.yaml .github/workflows/swagger-docs.yml"
   },
   "devDependencies": {
-    "prettier": "^3.9.10"
+    "prettier": "^3.10.1"
   }
 }
